@@ -50,8 +50,14 @@ class MarketplaceWebServiceProducts_Client implements MarketplaceWebServiceProdu
                                'MaxErrorRetry' => 3,
                                'Headers' => array()
                                );
+    
+    /** @var string */
+    private $_lastRequest = null;
 
+    /** @var string */
+    private $_lastResponse = null;
 
+    
     /**
      * Get Competitive Pricing For ASIN
      * Gets competitive pricing and related information for a product identified by
@@ -873,8 +879,25 @@ class MarketplaceWebServiceProducts_Client implements MarketplaceWebServiceProdu
         return $parameters;
     }
 
+    
+    /**     
+     * @return string
+     */
+    public function getLastRequest() 
+    {
+        return $this->_lastRequest;
+    }
 
+    
+    /**     
+     * @return string
+     */
+    public function getLastResponse() 
+    {
+        return $this->_lastResponse;
+    }
 
+    
     /**
      * Construct new Client
      *
@@ -1148,6 +1171,12 @@ class MarketplaceWebServiceProducts_Client implements MarketplaceWebServiceProdu
 
         $response = "";
         $response = curl_exec($ch);
+        
+        $this->_lastRequest = 'POST ' . $scheme . $url['host'] . ':' . $port . $uri . "\n";
+        $this->_lastRequest .= 'User-Agent: ' . $this->_config['UserAgent'] . "\n";
+        $this->_lastRequest .= implode("\n", $allHeadersStr) . "\n\n";
+        $this->_lastRequest .= $query;
+        $this->_lastResponse = $response;
 
         if($response === false) {
             require_once (dirname(__FILE__) . '/Exception.php');
@@ -1382,7 +1411,11 @@ class MarketplaceWebServiceProducts_Client implements MarketplaceWebServiceProdu
     private function _calculateStringToSignV2(array $parameters) {
         $data = 'POST';
         $data .= "\n";
-        $endpoint = parse_url ($this->_config['ServiceURL']);
+        $serviceUrl = $this->_config['ServiceURL'];
+        if(!empty($this->_config['ServiceOriginalURL'])) {
+            $serviceUrl = $this->_config['ServiceOriginalURL'];
+        }
+        $endpoint = parse_url ($serviceUrl);
         $data .= $endpoint['host'];
         $data .= "\n";
         $uri = array_key_exists('path', $endpoint) ? $endpoint['path'] : null;

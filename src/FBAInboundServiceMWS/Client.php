@@ -51,6 +51,12 @@ class FBAInboundServiceMWS_Client implements FBAInboundServiceMWS_Interface
                                'Headers' => array()
                                );
 
+    /** @var string */
+    private $_lastRequest = null;
+
+    /** @var string */
+    private $_lastResponse = null;
+    
 
     /**
      * Confirm Preorder
@@ -1424,7 +1430,24 @@ class FBAInboundServiceMWS_Client implements FBAInboundServiceMWS_Interface
     }
 
 
+    /**     
+     * @return string
+     */
+    public function getLastRequest() 
+    {
+        return $this->_lastRequest;
+    }
 
+    
+    /**     
+     * @return string
+     */
+    public function getLastResponse() 
+    {
+        return $this->_lastResponse;
+    }
+
+    
     /**
      * Construct new Client
      *
@@ -1698,6 +1721,12 @@ class FBAInboundServiceMWS_Client implements FBAInboundServiceMWS_Interface
 
         $response = "";
         $response = curl_exec($ch);
+        
+        $this->_lastRequest = 'POST ' . $scheme . $url['host'] . ':' . $port . $uri . "\n";
+        $this->_lastRequest .= 'User-Agent: ' . $this->_config['UserAgent'] . "\n";
+        $this->_lastRequest .= implode("\n", $allHeadersStr) . "\n\n";
+        $this->_lastRequest .= $query;
+        $this->_lastResponse = $response;
 
         if($response === false) {
             require_once (dirname(__FILE__) . '/Exception.php');
@@ -1932,7 +1961,11 @@ class FBAInboundServiceMWS_Client implements FBAInboundServiceMWS_Interface
     private function _calculateStringToSignV2(array $parameters) {
         $data = 'POST';
         $data .= "\n";
-        $endpoint = parse_url ($this->_config['ServiceURL']);
+        $serviceUrl = $this->_config['ServiceURL'];
+        if(!empty($this->_config['ServiceOriginalURL'])) {
+            $serviceUrl = $this->_config['ServiceOriginalURL'];
+        }
+        $endpoint = parse_url ($serviceUrl);
         $data .= $endpoint['host'];
         $data .= "\n";
         $uri = array_key_exists('path', $endpoint) ? $endpoint['path'] : null;
