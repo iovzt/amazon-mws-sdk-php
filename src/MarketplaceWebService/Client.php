@@ -66,6 +66,12 @@ class MarketplaceWebService_Client implements MarketplaceWebService_Interface
   private $headerContents;
   
   private $curlClient;
+  
+  /** @var string */
+  private $_lastRequest = null;
+
+  /** @var string */
+  private $_lastResponse = null;
 
   /**
    * Construct new Client
@@ -99,6 +105,22 @@ class MarketplaceWebService_Client implements MarketplaceWebService_Interface
       $this->config = array_merge($this->config, $config);
      
     $this->setUserAgentHeader($applicationName, $applicationVersion, $attributes);
+  }
+  
+  /**     
+   * @return string
+   */
+  public function getLastRequest() 
+  {
+    return $this->_lastRequest;
+  }
+  
+  /**     
+   * @return string
+   */
+  public function getLastResponse() 
+  {
+    return $this->_lastResponse;
   }
 
   /**
@@ -902,18 +924,18 @@ class MarketplaceWebService_Client implements MarketplaceWebService_Interface
   private function performRequest($action, array $converted, $dataHandle = null) {
 
     $curlOptions = $this->configureCurlOptions($action, $converted, $dataHandle);
-
+    
     if (is_null($curlOptions[CURLOPT_RETURNTRANSFER]) || !$curlOptions[CURLOPT_RETURNTRANSFER]) {
       $curlOptions[CURLOPT_RETURNTRANSFER] = true;
     }
 
     $this->curlClient = curl_init();
     curl_setopt_array($this->curlClient, $curlOptions);
-
+    
     $this->headerContents = @fopen('php://memory', 'rw+');
     $this->errorResponseBody = @fopen('php://memory', 'rw+');
-
-    $httpResponse = curl_exec($this->curlClient);
+    
+    $httpResponse = curl_exec($this->curlClient);        
 
     rewind($this->headerContents);
     $header = stream_get_contents($this->headerContents);
@@ -938,6 +960,23 @@ class MarketplaceWebService_Client implements MarketplaceWebService_Interface
         $httpResponse = $this->getDownloadResponseDocument($action, $parsedHeader);
     	}
     }
+    
+    /* bof - log request/response */
+    $this->_lastRequest = 'POST ' . $curlOptions[CURLOPT_URL] . "\n";    
+    $this->_lastRequest .= 'User-agent: ' . $curlOptions[CURLOPT_USERAGENT];
+    if (isset($curlOptions[CURLOPT_HTTPHEADER])) {
+        $this->_lastRequest .= "\n" . implode("\n", $curlOptions[CURLOPT_HTTPHEADER]);
+    }
+    if(isset($curlOptions[CURLOPT_POSTFIELDS])) {
+        $this->_lastRequest .= "\n\n" . $curlOptions[CURLOPT_POSTFIELDS];
+    }
+    if(isset($curlOptions[CURLOPT_INFILE])) {
+        rewind($curlOptions[CURLOPT_INFILE]);
+        $this->_lastRequest .= "\n\n" . stream_get_contents($curlOptions[CURLOPT_INFILE]);
+        rewind($curlOptions[CURLOPT_INFILE]);
+    }
+    $this->_lastResponse = $httpResponse;
+    /* eof - log request/response */
     
     // Cleanup open streams and cURL instance.
     @fclose($this->headerContents);
@@ -1175,7 +1214,7 @@ class MarketplaceWebService_Client implements MarketplaceWebService_Interface
       $parameters['SignatureMethod'] = $this->config['SignatureMethod'];
     }
     $parameters['Signature'] = $this->signParameters($parameters, $this->awsSecretAccessKey);
-
+    
     return $parameters;
   }
 
@@ -1241,8 +1280,12 @@ class MarketplaceWebService_Client implements MarketplaceWebService_Interface
    * @return String to Sign
    */
   private function calculateStringToSignV2(array $parameters, $queuepath = null) {
-
-    $parsedUrl = parse_url($this->config['ServiceURL']);
+    
+    $serviceUrl = $this->config['ServiceURL'];
+    if(!empty($this->config['ServiceOriginalURL'])) {
+        $serviceUrl = $this->config['ServiceOriginalURL'];
+    }
+    $parsedUrl = parse_url($serviceUrl);
     $endpoint = $parsedUrl['host'];
     if (isset($parsedUrl['port']) && !is_null($parsedUrl['port'])) {
       $endpoint .= ':' . $parsedUrl['port'];
